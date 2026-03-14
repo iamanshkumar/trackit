@@ -1,89 +1,80 @@
 import readline from 'readline-sync';
-import fs, { read } from "node:fs";
-import {readdir} from "node:fs/promises";
-import {format} from "date-fns"
+import chalk from 'chalk';
+import * as TaskService from './taskService.js';
 
-let exit = false;
+console.log(chalk.cyan.bold("\n--- TrackIt CLI ---"));
+console.log(chalk.gray("Type 'help' for commands or 'exit' to quit.\n"));
 
-console.log("Hi welcome to TrackIt. A CLI application that tracks your task.");
-console.log("Enter help to know all commands.")
+async function main() {
+    let exit = false;
 
-const tasks = './tasks';
+    while (!exit) {
+        const input = readline.question(chalk.whiteBright("> ")).trim();
+        const [command, ...args] = input.split(' ');
 
-function createTask(currTask , id){
-    let date = Date.now()
-    const formattedDate = format(date , 'dd/MM/yyyy')
-    let task = {
-        "id" : id,
-        "description" : currTask,
-        "status" : "todo",
-        "createdAt" : formattedDate,
-        "updatedAt" : formattedDate
-    }
+        try {
+            switch (command) {
+                case 'help':
+                    printHelp();
+                    break;
 
-    let filePath = tasks+`/task${id}.json`
+                case 'add':
+                    const desc = args.join(' ');
+                    if (!desc) return console.log(chalk.red("Error: Description required."));
+                    await TaskService.addTask(desc);
+                    break;
 
-    try{
-        fs.writeFileSync(filePath , JSON.stringify(task,null,2));
-        console.log("Task added successfully");
-    }catch(err){
-        console.log("Error while creating task : ",err);
+                case 'update':
+                    const [upId, ...upDesc] = args;
+                    await TaskService.updateTask(parseInt(upId), upDesc.join(' '));
+                    break;
+
+                case 'delete':
+                    await TaskService.deleteTask(parseInt(args[0]));
+                    break;
+
+                case 'mark-in-progress':
+                    await TaskService.updateTask(parseInt(args[0]), null, 'in-progress');
+                    break;
+
+                case 'mark-done':
+                    await TaskService.updateTask(parseInt(args[0]), null, 'done');
+                    break;
+
+                case 'list':
+                    const statusFilter = args[0]; // e.g., 'done', 'todo'
+                    await TaskService.listTasks(statusFilter);
+                    break;
+
+                case 'exit':
+                    exit = true;
+                    break;
+
+                default:
+                    console.log(chalk.red("Unknown command. Type 'help'."));
+            }
+        } catch (err) {
+            console.log(chalk.red(`Error: ${err.message}`));
+        }
     }
 }
 
-while(!exit){
-    let choice = String(readline.question());
-    if(choice=="help"){
-        console.log("You can use the following commands to track your task");
-        console.log("1. add : You can add a task");
-        console.log("2. update {task-id} : You can update the description of your task");
-        console.log("3. delete {task-id} : You can delete a task");
-        console.log("4. mark-in-progress {task-id} : You can change the status of the task to in progress");
-        console.log("5. mark-done {task-id} : You can change the status of the task to done");
-        console.log("6. list : You can get the list of all the tasks");
-        console.log("7. list todo : You can get list of all the tasks whose status is todo");
-        console.log("8. list done : You can get list of all the tasks whose status is done");
-        console.log("9. list in-progress : You can get list of all the tasks whose status is in-progress");
-        console.log("10. exit : end the cli application");
-    }
-    if(choice==="exit"){
-        exit = true;
-    }
-    
-    else{
-        if(choice.startsWith("add")){
-            try{
-                if(!fs.existsSync(tasks)){
-                    fs.mkdirSync(tasks);
-                }
-
-                let currTask = choice.slice(4,choice.length);
-                if(currTask.length<2){
-                    console.log("You must enter a description");
-                }else{
-                    const totalTasks = await readdir(tasks);
-                    let id = totalTasks.length+1;
-                    createTask(currTask , id);
-                }   
-            }catch(err){
-                console.log("Error in creating folder" , err);
-            }
-        }
-        
-        if(choice.startsWith("update")){
-            try{
-                let newDesc = choice.slice(7,choice.length);
-                if(newDesc.length<2){
-                    console.log("You must enter a description");
-                }else{
-                    console.log(newDesc);
-                }
-            }catch(err){
-                console.log("Error in updating task" , err);
-            }
-        }
-        else{
-            console.log("Other options choosed");
-        }
-    }
+function printHelp() {
+    const commands = [
+        ['add {desc}', 'Add a new task'],
+        ['update {id} {desc}', 'Update task description'],
+        ['delete {id}', 'Remove a task'],
+        ['mark-in-progress {id}', 'Set status to in-progress'],
+        ['mark-done {id}', 'Set status to done'],
+        ['list', 'Show all tasks'],
+        ['list {status}', 'Filter: todo, in-progress, done'],
+        ['exit', 'Close application']
+    ];
+    console.log(chalk.yellow("\nAvailable Commands:"));
+    commands.forEach(([cmd, desc]) => {
+        console.log(`  ${chalk.bold(cmd.padEnd(25))} ${chalk.gray(desc)}`);
+    });
+    console.log();
 }
+
+main();
